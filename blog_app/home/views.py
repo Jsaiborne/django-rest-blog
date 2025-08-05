@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import Blog
 from django.db.models import Q
-from django.core.paginator import Paginator
+from rest_framework.pagination import PageNumberPagination
 
 class PublicBlog(APIView):
     def get(self, request):
@@ -15,18 +15,26 @@ class PublicBlog(APIView):
             
             blogs = Blog.objects.all().order_by('?')
 
+            if request.GET.get('uid'):
+                uid = request.GET.get('uid')
+                blogs = blogs.filter(uid = uid)
+
             if request.GET.get('search'):
                 search = request.GET.get('search')
                 blogs = blogs.filter(Q(title__icontains = search) | Q(blog_text__icontains = search))
 
 
-            
-            page_number = request.GET.get('page', 1)
-            paginator=Paginator(blogs,1)
-            serializer = BlogSerializer(paginator.page(page_number), many = True)
+            paginator = PageNumberPagination()
+            paginator.page_size = 4                     # <-- how many per page
 
-            return Response({'data': serializer.data,
-                                 'message': 'Blog fetched successfully'}, status=status.HTTP_201_CREATED)
+        # 4. Let paginator slice the queryset according to ?page=
+            page = paginator.paginate_queryset(blogs, request)
+
+        # 5. Serialize just that page of objects
+            serializer = BlogSerializer(page, many=True)
+
+        # 6. Return a fully paginated response
+            return paginator.get_paginated_response(serializer.data)
         
         except Exception as e:
             return Response({
@@ -46,6 +54,11 @@ class BlogView(APIView):
             if request.GET.get('search'):
                 search = request.GET.get('search')
                 blogs = blogs.filter(Q(title__icontains = search) | Q(blog_text__icontains = search))
+
+            if request.GET.get('uid'):
+                uid = request.GET.get('uid')
+                blogs = blogs.filter(uid = uid)
+               
 
 
             serializer = BlogSerializer(blogs, many = True)
